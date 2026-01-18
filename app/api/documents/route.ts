@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     }
 
     const documents = await query<MarkdownDocument>(
-      'SELECT * FROM markdown_documents WHERE user_id = $1 ORDER BY created_at DESC',
+      'SELECT * FROM markdown_documents WHERE user_id = $1 ORDER BY updated_at DESC',
       [userId]
     );
 
