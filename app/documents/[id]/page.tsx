@@ -81,7 +81,7 @@ export default function DocumentViewPage({
   if (error || !document) {
     return (
       <div className="min-h-screen bg-zinc-50 dark:bg-black">
-        <div className="mx-auto max-w-4xl px-4 py-8">
+        <div className="mx-auto w-[95%] px-4 py-8">
           <div className="rounded-lg border border-red-200 bg-red-50 p-8 text-center dark:border-red-800 dark:bg-red-900/20">
             <p className="text-red-800 dark:text-red-400">{error || 'ドキュメントが見つかりません'}</p>
             <Link
@@ -98,7 +98,7 @@ export default function DocumentViewPage({
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-black">
-      <div className="mx-auto max-w-4xl px-4 py-8">
+      <div className="mx-auto w-[95%] px-4 py-8">
         <div className="mb-8 flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-black dark:text-zinc-50">

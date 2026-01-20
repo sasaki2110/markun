@@ -61,7 +61,7 @@ export default function DocumentList() {
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-black">
-      <div className="mx-auto max-w-4xl px-4 py-8">
+      <div className="mx-auto w-[95%] px-4 py-8">
         <div className="mb-8 flex items-center justify-between">
           <h1 className="text-3xl font-bold text-black dark:text-zinc-50">
             マークダウンドキュメント
