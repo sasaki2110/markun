@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUserId } from '@/app/lib/utils';
-import { query, queryOne } from '@/app/lib/db';
+import { getDocuments, getDocumentsInFolder, createDocument, validateCreateDocumentInput } from '@/app/lib/documents';
 import { z } from 'zod';
-import type { MarkdownDocument, CreateDocumentInput } from '@/app/types/document';
+import type { Document, CreateDocumentInput } from '@/app/types/document';
 
 const createDocumentSchema = z.object({
   title: z.string().min(1).max(255),
-  content: z.string(),
+  content: z.string().optional(),
+  type: z.enum(['file', 'folder']),
+  parent_id: z.string().nullable().optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -16,10 +18,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const documents = await query<MarkdownDocument>(
-      'SELECT * FROM markdown_documents WHERE user_id = $1 ORDER BY updated_at DESC',
-      [userId]
-    );
+    const { searchParams } = new URL(request.url);
+    const folderId = searchParams.get('folderId');
+
+    // クエリパラメータでフォルダIDが指定された場合はそのフォルダ内のアイテムを取得
+    // それ以外の場合は全ドキュメントを取得（後方互換性のため）
+    const documents = folderId
+      ? await getDocumentsInFolder(userId, folderId === 'null' ? null : folderId)
+      : await getDocuments(userId);
 
     return NextResponse.json(documents);
   } catch (error) {
@@ -41,19 +47,23 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validatedData = createDocumentSchema.parse(body);
 
-    const result = await queryOne<MarkdownDocument>(
-      `INSERT INTO markdown_documents (user_id, title, content)
-       VALUES ($1, $2, $3)
-       RETURNING *`,
-      [userId, validatedData.title, validatedData.content]
-    );
+    const input: CreateDocumentInput = {
+      title: validatedData.title,
+      content: validatedData.content,
+      type: validatedData.type,
+      parent_id: validatedData.parent_id,
+    };
 
-    if (!result) {
+    // バリデーション
+    const validationError = validateCreateDocumentInput(input);
+    if (validationError) {
       return NextResponse.json(
-        { error: 'Failed to create document' },
-        { status: 500 }
+        { error: validationError },
+        { status: 400 }
       );
     }
+
+    const result = await createDocument(userId, input);
 
     return NextResponse.json(result, { status: 201 });
   } catch (error) {

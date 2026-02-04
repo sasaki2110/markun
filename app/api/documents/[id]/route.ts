@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUserId } from '@/app/lib/utils';
-import { query, queryOne } from '@/app/lib/db';
+import { getDocumentById, updateDocument, deleteDocument, moveDocument, checkCircularReference, validateUpdateDocumentInput } from '@/app/lib/documents';
 import { z } from 'zod';
-import type { MarkdownDocument, UpdateDocumentInput } from '@/app/types/document';
+import type { Document, UpdateDocumentInput } from '@/app/types/document';
 
 const updateDocumentSchema = z.object({
   title: z.string().min(1).max(255).optional(),
   content: z.string().optional(),
+  parent_id: z.string().nullable().optional(),
 });
 
 export async function GET(
@@ -20,10 +21,7 @@ export async function GET(
     }
 
     const { id } = await params;
-    const document = await queryOne<MarkdownDocument>(
-      'SELECT * FROM markdown_documents WHERE id = $1 AND user_id = $2',
-      [id, userId]
-    );
+    const document = await getDocumentById(id, userId);
 
     if (!document) {
       return NextResponse.json({ error: 'Document not found' }, { status: 404 });
@@ -54,46 +52,38 @@ export async function PUT(
     const validatedData = updateDocumentSchema.parse(body);
 
     // 既存のドキュメントを確認
-    const existing = await queryOne<MarkdownDocument>(
-      'SELECT * FROM markdown_documents WHERE id = $1 AND user_id = $2',
-      [id, userId]
-    );
-
+    const existing = await getDocumentById(id, userId);
     if (!existing) {
       return NextResponse.json({ error: 'Document not found' }, { status: 404 });
     }
 
-    // 更新
-    const updateFields: string[] = [];
-    const updateValues: unknown[] = [];
-    let paramIndex = 1;
-
-    if (validatedData.title !== undefined) {
-      updateFields.push(`title = $${paramIndex}`);
-      updateValues.push(validatedData.title);
-      paramIndex++;
-    }
-    if (validatedData.content !== undefined) {
-      updateFields.push(`content = $${paramIndex}`);
-      updateValues.push(validatedData.content);
-      paramIndex++;
+    // parent_idが変更される場合は循環参照チェック
+    if (validatedData.parent_id !== undefined && validatedData.parent_id !== existing.parent_id) {
+      const hasCircularRef = await checkCircularReference(userId, id, validatedData.parent_id);
+      if (hasCircularRef) {
+        return NextResponse.json(
+          { error: 'Circular reference detected' },
+          { status: 400 }
+        );
+      }
     }
 
-    if (updateFields.length === 0) {
-      return NextResponse.json(existing);
+    const input: UpdateDocumentInput = {
+      title: validatedData.title,
+      content: validatedData.content,
+      parent_id: validatedData.parent_id,
+    };
+
+    // バリデーション
+    const validationError = validateUpdateDocumentInput(input, existing.type);
+    if (validationError) {
+      return NextResponse.json(
+        { error: validationError },
+        { status: 400 }
+      );
     }
 
-    updateFields.push(`updated_at = NOW()`);
-    updateValues.push(id);
-    updateValues.push(userId);
-
-    const result = await queryOne<MarkdownDocument>(
-      `UPDATE markdown_documents
-       SET ${updateFields.join(', ')}
-       WHERE id = $${paramIndex} AND user_id = $${paramIndex + 1}
-       RETURNING *`,
-      updateValues
-    );
+    const result = await updateDocument(id, userId, input);
 
     if (!result) {
       return NextResponse.json(
@@ -130,12 +120,9 @@ export async function DELETE(
 
     const { id } = await params;
 
-    const result = await queryOne<MarkdownDocument>(
-      'DELETE FROM markdown_documents WHERE id = $1 AND user_id = $2 RETURNING *',
-      [id, userId]
-    );
+    const success = await deleteDocument(id, userId);
 
-    if (!result) {
+    if (!success) {
       return NextResponse.json({ error: 'Document not found' }, { status: 404 });
     }
 

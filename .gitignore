@@ -42,3 +42,9 @@ next-env.d.ts
 
 # serena
 .serena
+
+# agents
+.agents/
+
+# cursor
+.cursor/
