@@ -108,9 +108,10 @@ export async function deleteDocument(id: string, userId: string): Promise<boolea
   const sql = `
     DELETE FROM markdown_documents
     WHERE id = $1 AND user_id = $2
+    RETURNING id
   `;
   const result = await query(sql, [id, userId]);
-  return (result as any[]).length > 0;
+  return result.length > 0;
 }
 
 export async function moveDocument(
@@ -142,10 +143,6 @@ export async function getDocumentTree(userId: string): Promise<Document[]> {
 export function validateCreateDocumentInput(input: CreateDocumentInput): string | null {
   if (!input.title.trim()) {
     return 'タイトルは必須です';
-  }
-
-  if (input.type === 'file' && (!input.content || !input.content.trim())) {
-    return 'ファイルの場合、コンテンツは必須です';
   }
 
   if (input.type === 'folder' && input.content) {
